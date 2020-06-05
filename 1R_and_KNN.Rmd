@@ -1,0 +1,195 @@
+---
+title: "1R y K vecinos más cercanos"
+author: "Pablo Benavides-Herrera"
+date: 2020-06-04
+output: 
+  html_notebook:
+    toc: TRUE
+    toc_float: TRUE
+    theme: united
+    highlight: tango
+---
+
+```{r pkgs, message=FALSE}
+library(easypackages)
+packages("tidyverse", "readxl")
+```
+
+
+# Predicción de datos con **KNN**
+
+```{r datos}
+datos <- read_excel("Real estate valuation data set.xlsx")
+datos
+```
+
+La definición de las variables es la siguiente:
+
+* X1: fecha de la transacción (por ejemplo 2013.250=2013 Marzo, * 2013.500=2013 Junio, etc.)
+* X2: edad de la casa en años
+* X3: distancial al MRT (transporte masivo) más cercano en metros
+* X4: número de tiendas de conveniencia en el vecindario (entero)
+* X5: latitud (unidad: grados)
+* X6: longitude (unidad: grados)
+* Y: precio por unidad de área (10000 Nuevos dólares taiwaneses/ 3.3 m2
+
+Seleccionamos solo las variables edad de la casa, distancia al MRT, el número de tiendas de conveniencia y la variable de respuesta.
+
+```{r}
+datos_an <- datos %>% 
+  select(X2, X3, X4, Y)
+datos_an
+```
+
+## Estadística básica
+
+```{r}
+summary(datos_an)
+apply(datos_an,2,sd)
+```
+
+## Objetivos
+
+1. Predecir el precio por metro cuadrado de una vivienda en función de ciertas características (edad de la propiedad, la distancia al transporte y el número de comercios alrededor).
+
+## Preguntas
+
+
+* ¿Afecta la edad de la casa su valor?
+* ¿En dónde se sitúan las casas con mejores características?
+* ¿Se están pagando impuestos correctamente?
+
+
+**¿Tenemos toda la información necesaria para resolver mi problema de predicción?**
+
+*No. Probablemente no tenemos toda la información para hacer el mejor modelo. Informción como el número de baños y otras comodidades serían complementarias para hacer un buen modelo* 
+
+
+```{r}
+datos_an %>% 
+  GGally::ggpairs()
+```
+
+
+```{r}
+pairs(datos_an, lower.panel = panel.smooth)
+```
+
+
+```{r}
+plot(datos_an$X3, datos_an$Y, las=1, xlab = "Distancia al transporte (ln m)", ylab = "Precio ($/m2)", main = "Precio vs. distancia al transporte", log = "xy")
+```
+
+La gráfica en escala logarítmica (para x) parece mostrar que la variabilidad en los datos disminuye a medida que las casas se sitúan 
+
+
+```{r}
+plot(datos_an, )
+```
+
+
+```{r}
+log_1 <- function(x,n = 1){
+  log(x + n)
+}
+datos_an$X2log <- log(datos_an$X2+1)
+datos_an$X3log <- log(datos_an$X3)
+datos_an$X4log <- log(datos_an$X4+1)
+datos_an$Ylog <- log(datos_an$Y)
+# datos_an <- datos_an %>% 
+#   mutate_at(.vars = c("X2","X4"),.funs = log_1) %>% 
+#   mutate_at(.vars = c("X3","Y"), .funs = log)
+datos_an
+```
+
+Escalamiento de las variables
+
+```{r}
+datos_an_scale <- scale(datos_an, center = TRUE, scale = TRUE)
+medias <- attr(datos_an_scale, "scaled.center")
+devsv_Est <- attr(datos_an_scale, "scaled.scale")
+datos_an_scale <- as_tibble(datos_an_scale)
+medias
+```
+
+
+
+## Calibración de un modelo lineal
+
+### Separación del conjunto de datos en entrenamiento y validación
+
+```{r}
+set.seed(20200604)
+p_vl <- 0.2
+N <- dim(datos_an_scale)[1]
+ix_vl <- sample(N, round(p_vl*N), replace = FALSE)
+datos_tr <- datos_an_scale[-ix_vl,]
+datos_vl <- datos_an_scale[ix_vl,]
+```
+
+### Ajuste de un modelo lineal
+
+```{r}
+modelo_lm <- lm(Ylog ~ X2log + X3log + X4log, data = datos_tr)
+summary(modelo_lm)
+```
+
+Todos los modelos deben contener un intercepto, a menos que la variable *Y* haya sido centrada.
+
+```{r}
+modelo_lm <- lm(Ylog ~ -1 + X2log + X3log + X4log, data = datos_tr)
+summary(modelo_lm)
+```
+
+## Diagnóstico de residuos
+
+```{r}
+plot(modelo_lm, which = 1)
+```
+Aquí se espera no ver patrones, ni observaciones *sospechosas*.c
+
+```{r}
+plot(modelo_lm, which = 2)
+```
+
+Esperamos que siga la línea punteada. Si las colas se alejan, se comienza a perder el supuesto de normalidad en los residuos.
+
+
+```{r}
+plot(modelo_lm, which = 3)
+```
+
+```{r}
+plot(modelo_lm, which = 4)
+```
+La distancia de Cook nos permite ver qué tanto cambian los errores de un modelo, cuando se quitan ciertas observaciones.
+
+
+
+
+```{r}
+plot(modelo_lm, which = 5)
+```
+
+El *leverage* es una métrica de qué tanto cambia una predicción, cuando cambia el valor real de esa observación.
+
+
+
+```{r}
+plot(modelo_lm, which = 6)
+```
+
+La distancia de Cook vs. Leverage. Las observaciones que tienen grandes distancias de Cook y Leverage están afectando más fuertemente al modelo.
+
+
+Ahora un modelo lineal con interacciones.
+
+```{r}
+modelo_lm_int <- lm(Ylog ~ -1 + X2log + X3log + X4log + X3log:X4log, data = datos_tr)
+summary(modelo_lm_int)
+```
+
+```{r}
+anova(modelo_lm_int, modelo_lm)
+```
+
