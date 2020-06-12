@@ -6,7 +6,7 @@ output:
   html_notebook:
     toc: TRUE
     toc_float: TRUE
-    theme: united
+    theme: darkly
     highlight: tango
 ---
 
@@ -192,4 +192,44 @@ summary(modelo_lm_int)
 ```{r}
 anova(modelo_lm_int, modelo_lm)
 ```
+
+
+```{r}
+plot(modelo_lm_int, which = 1)
+```
+
+```{r}
+plot(modelo_lm_int, which = 2)
+```
+
+
+```{r}
+plot(modelo_lm_int, which = 3)
+```
+
+
+```{r}
+plot(modelo_lm_int, which = 4)
+```
+
+Residuales estandarizados versus *leverage*:
+
+
+```{r}
+plot(modelo_lm_int, which = 5)
+```
+
+La distancia de Cook vs. el *leverage*. Un leverage muy alto significa que la observación tiene un impacto muy fuerte sobre su propia predicción.
+
+```{r}
+plot(modelo_lm_int, which = 6)
+```
+
+
+
+```{r}
+modelo2 <- lm(Ylog ~ -1 + X2log + X3log + X4log, data = datos_tr)
+summary(modelo2)
+```
+
 
